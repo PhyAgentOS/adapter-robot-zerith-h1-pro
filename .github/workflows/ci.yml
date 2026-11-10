@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
 
 permissions:
@@ -70,3 +70,24 @@ jobs:
           if findings:
               raise SystemExit(f"Potential secrets detected: {findings}")
           PY
+
+  binary:
+    name: Robot and camera candidate binaries
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: python -m pip install uv==0.12.5
+      - name: Verify lock file
+        run: uv lock --check
+      - name: Build locked candidates
+        run: bash scripts/build_pyinstaller.sh
+      - name: Check both entrypoints
+        run: |
+          dist/robots_zerith_h1_pro --version
+          dist/robots_zerith_h1_pro_camera --version
+          dist/robots_zerith_h1_pro --help
+          dist/robots_zerith_h1_pro_camera --help

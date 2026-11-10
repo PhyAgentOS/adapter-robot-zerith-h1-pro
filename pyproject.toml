@@ -1,6 +1,6 @@
 [project]
 name = "zerith-h1-pro"
-version = "1.0.0"
+version = "2.0.0"
 description = "Zerith H1 Pro Forge robot node and demos"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -11,10 +11,10 @@ maintainers = [{ name = "PhyAgentOS Contributors" }]
 keywords = ["robot", "zerith", "h1-pro", "dora", "forge", "robotics"]
 dependencies = [
     "av>=18,<19",
-    "dora-rs==0.4.1",
-    "forge-common>=1.0.1,<2",
-    "forge-msgs>=1.0.1,<2",
-    "forge-robot>=1.0.1,<2",
+    "dora-rs>=1.0.1,<2",
+    "forge-common>=2.1.0,<3",
+    "forge-msgs>=2.0.0,<3",
+    "forge-robot>=2.0.0,<3",
     "numpy>=2.2",
     "opencv-python>=4.10",
     "pillow>=12.3.0",

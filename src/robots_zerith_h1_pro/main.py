@@ -68,9 +68,7 @@ def _build_driver(
         locomotion_max_vx_mps=config.locomotion_max_vx_mps,
         locomotion_max_wz_radps=config.locomotion_max_wz_radps,
         locomotion_max_wheel_speed_radps=config.locomotion_max_wheel_speed_radps,
-        locomotion_command_timeout_seconds=(
-            config.locomotion_command_timeout_seconds
-        ),
+        locomotion_command_timeout_seconds=(config.locomotion_command_timeout_seconds),
         auto_connect=auto_connect,
         camera_grpc_target=config.camera_grpc_target if include_cameras else None,
         cameras=config.cameras if include_cameras else None,
@@ -112,9 +110,17 @@ def _send_position_ramp(
 @app.callback(invoke_without_command=True)
 def _main(
     ctx: typer.Context,
+    version: bool = typer.Option(
+        False, "--version", is_eager=True, help="Show package version and exit"
+    ),
     config: str | None = typer.Option(None, "--config", help="YAML 配置文件路径"),
 ) -> None:
     """无子命令时默认运行 Zerith H1 Pro dora 节点。"""
+    if version:
+        from importlib.metadata import version as package_version
+
+        typer.echo(f"robots_zerith_h1_pro {package_version('zerith-h1-pro')}")
+        raise typer.Exit()
     if ctx.invoked_subcommand is not None:
         return
     sys.exit(_run_node(config_path=config))
@@ -149,9 +155,13 @@ def get_mode(
 
 @app.command("set-mode")
 def set_mode(
-    mode: str = typer.Argument(..., help="目标模式：uninitialized/low_level/gravity_compensation_level"),
+    mode: str = typer.Argument(
+        ..., help="目标模式：uninitialized/low_level/gravity_compensation_level"
+    ),
     config: str | None = typer.Option(None, "--config", help="YAML 配置文件路径"),
-    wait_timeout: float = typer.Option(3.0, "--wait-timeout", help="等待模式切换超时秒数"),
+    wait_timeout: float = typer.Option(
+        3.0, "--wait-timeout", help="等待模式切换超时秒数"
+    ),
 ) -> None:
     """切换机器人控制模式。"""
     _, driver = _build_driver(
@@ -172,7 +182,9 @@ def set_mode(
 @app.command("move-actuator")
 def move_actuator(
     actuator: str = typer.Argument(..., help="要移动的 actuator 名称，如 lift"),
-    target: float = typer.Option(..., "--target", help="目标位置，单位使用当前 actuator 状态里的 unit"),
+    target: float = typer.Option(
+        ..., "--target", help="目标位置，单位使用当前 actuator 状态里的 unit"
+    ),
     config: str | None = typer.Option(None, "--config", help="YAML 配置文件路径"),
     control_mode: str = typer.Option(
         "low_level",
@@ -215,10 +227,16 @@ def move_actuator(
         if actuator not in state.name:
             raise RuntimeError(f"状态中未包含 actuator: {actuator}")
         if actuator in {"wheel_left", "wheel_right"}:
-            raise typer.BadParameter("move-actuator 只移动 position actuator，不移动轮速。")
+            raise typer.BadParameter(
+                "move-actuator 只移动 position actuator，不移动轮速。"
+            )
 
         current = float(state.to_np([actuator], "position")[0])
-        unit = "meters" if actuator in {"lift", "left_gripper", "right_gripper"} else "radians"
+        unit = (
+            "meters"
+            if actuator in {"lift", "left_gripper", "right_gripper"}
+            else "radians"
+        )
         typer.echo(f"mode: {current_mode}")
         typer.echo(
             f"{actuator}: current={current:.6f}, target={target:.6f}, "
