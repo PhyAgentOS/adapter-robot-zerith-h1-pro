@@ -50,7 +50,7 @@ jobs:
       - name: Export and audit locked runtime dependencies
         run: |
           uv export --frozen --format requirements-txt --no-dev --no-emit-project --output-file /tmp/requirements.txt
-          uvx pip-audit --requirement /tmp/requirements.txt
+          uvx --python 3.12 pip-audit --requirement /tmp/requirements.txt
 
   secrets:
     runs-on: ubuntu-latest
