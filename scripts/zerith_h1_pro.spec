@@ -5,7 +5,10 @@ import os
 import shutil
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata
+
+_camera_only = os.environ.get("ZERITH_CAMERA_ONLY") == "1"
+_binary_name = "robots_zerith_h1_pro_camera" if _camera_only else "robots_zerith_h1_pro"
 
 _spec_dir = os.path.dirname(os.path.abspath(SPEC))
 _repo_root = os.path.abspath(os.path.join(_spec_dir, ".."))
@@ -119,10 +122,10 @@ hiddenimports = (
 )
 
 a = Analysis(
-    [os.path.join(_spec_dir, "dora_entry.py")],
+    [os.path.join(_spec_dir, "camera_entry.py" if _camera_only else "dora_entry.py")],
     pathex=[_repo_root, os.path.join(_repo_root, "src")],
     binaries=_collect_camera_runtime_binaries(),
-    datas=_collect_sdk_datas() + _collect_package_datas(),
+    datas=_collect_sdk_datas() + _collect_package_datas() + [item for package in ("zerith-h1-pro", "dora-rs", "forge-common", "forge-msgs", "forge-robot") for item in copy_metadata(package)],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -139,7 +142,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="robots_zerith_h1_pro",
+    name=_binary_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

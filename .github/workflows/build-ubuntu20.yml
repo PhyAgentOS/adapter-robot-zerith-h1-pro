@@ -9,11 +9,11 @@ on:
       ref:
         description: Git ref to build
         required: true
-        default: v1.0.0
+        default: v2.0.0
       version:
         description: Release version without the v prefix
         required: true
-        default: 1.0.0
+        default: 2.0.0
 
 permissions:
   contents: read
@@ -56,22 +56,21 @@ jobs:
       - name: Verify and package binaries
         run: |
           test "${{ inputs.ref }}" = "v${RELEASE_VERSION}"
-          ./dist/robots_zerith_h1_pro --help >/dev/null
-          file ./dist/robots_zerith_h1_pro
-          ldd --version | sed -n '1p'
-          archive="zerith-h1-pro-v${RELEASE_VERSION}-linux-x86_64-ubuntu20.04.tar.gz"
-          tar \
-            --sort=name \
-            --mtime='UTC 1970-01-01' \
-            --owner=0 \
-            --group=0 \
-            --numeric-owner \
-            -C dist \
-            -czf "${archive}" \
-            robots_zerith_h1_pro
-          sha256sum "${archive}" > "${archive}.sha256"
-          test "$(tar -tzf "${archive}")" = "robots_zerith_h1_pro"
-          sha256sum --check "${archive}.sha256"
+          for entrypoint in robots_zerith_h1_pro robots_zerith_h1_pro_camera; do
+            test "$(./dist/${entrypoint} --version)" = "${entrypoint} ${RELEASE_VERSION}"
+            ./dist/${entrypoint} --help >/dev/null
+            file ./dist/${entrypoint}
+            case "${entrypoint}" in
+              robots_zerith_h1_pro) prefix="zerith-h1-pro" ;;
+              *) prefix="zerith-h1-pro-camera" ;;
+            esac
+            archive="${prefix}-v${RELEASE_VERSION}-linux-x86_64-ubuntu20.04.tar.gz"
+            tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+              -C dist -czf "${archive}" "${entrypoint}"
+            sha256sum "${archive}" > "${archive}.sha256"
+            test "$(tar -tzf "${archive}")" = "${entrypoint}"
+            sha256sum --check "${archive}.sha256"
+          done
 
       - uses: actions/upload-artifact@v6
         with:
@@ -79,5 +78,7 @@ jobs:
           path: |
             zerith-h1-pro-v${{ inputs.version }}-linux-x86_64-ubuntu20.04.tar.gz
             zerith-h1-pro-v${{ inputs.version }}-linux-x86_64-ubuntu20.04.tar.gz.sha256
+            zerith-h1-pro-camera-v${{ inputs.version }}-linux-x86_64-ubuntu20.04.tar.gz
+            zerith-h1-pro-camera-v${{ inputs.version }}-linux-x86_64-ubuntu20.04.tar.gz.sha256
           if-no-files-found: error
           retention-days: 30

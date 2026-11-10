@@ -36,9 +36,8 @@ def _run_node(config_path: str | None) -> int:
         image_fps=config.image_fps,
         auto_connect=True,
     )
-    node = Node()
-
     try:
+        node = Node()
         for event in node:
             match event.get("type"):
                 case "INPUT":
@@ -50,14 +49,16 @@ def _run_node(config_path: str | None) -> int:
                             if payload is not None:
                                 node.send_output(camera.output_id, payload)
                         if camera.enable_depth and camera.depth_output_id:
-                            payload = driver.get_latest_encoded_image(camera.depth_output_id)
+                            payload = driver.get_latest_encoded_image(
+                                camera.depth_output_id
+                            )
                             if payload is not None:
                                 node.send_output(camera.depth_output_id, payload)
                 case "STOP":
                     break
                 case "ERROR":
                     logger.error("camera node received ERROR: %s", event.get("error"))
-                    break
+                    return 1
                 case _:
                     pass
     finally:
@@ -68,8 +69,16 @@ def _run_node(config_path: str | None) -> int:
 @app.callback(invoke_without_command=True)
 def _main(
     ctx: typer.Context,
+    version: bool = typer.Option(
+        False, "--version", is_eager=True, help="Show package version and exit"
+    ),
     config: str | None = typer.Option(None, "--config", help="YAML 配置文件路径"),
 ) -> None:
+    if version:
+        from importlib.metadata import version as package_version
+
+        typer.echo(f"robots_zerith_h1_pro_camera {package_version('zerith-h1-pro')}")
+        raise typer.Exit()
     if ctx.invoked_subcommand is not None:
         return
     sys.exit(_run_node(config_path=config))
