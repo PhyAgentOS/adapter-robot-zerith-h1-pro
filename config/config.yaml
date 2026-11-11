@@ -46,9 +46,9 @@ lifecycle_position_move_seconds: 3.0
 # LOW_LEVEL 移动底盘安全参数。轮径/轮距来自交付模型，真机启用前必须复核。
 wheel_radius_m: 0.0835
 wheel_track_width_m: 0.379
-locomotion_max_vx_mps: 0.08
-locomotion_max_wz_radps: 0.4
-locomotion_max_wheel_speed_radps: 1.0
+locomotion_max_vx_mps: 0.30
+locomotion_max_wz_radps: 1.00
+locomotion_max_wheel_speed_radps: 5.0
 locomotion_command_timeout_seconds: 0.25
 
 # 相机 gRPC 地址自动使用 robot_ip:50051。

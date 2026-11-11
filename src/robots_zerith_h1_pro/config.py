@@ -17,14 +17,14 @@ BUNDLED_SDK_REL = Path("third_party") / "H1_SDK_1.3.7"
 CAMERA_GRPC_PORT = 50051
 LOCAL_CAMERA_HOST = "127.0.0.1"
 
-# Conservative low-level locomotion defaults. Geometry is derived from the
-# delivered H1 Pro model. The SDK does not document wheel Speed units/limits;
-# 1.0 is a project safety ceiling inferred from its low-level example.
+# Low-level locomotion defaults. Geometry is derived from the delivered H1 Pro
+# model. The SDK does not document wheel Speed units/limits; wheel commands use
+# rad/s here, and the ceiling below is a project limit, not a manufacturer rating.
 ZERITH_H1_PRO_WHEEL_RADIUS_M = 0.0835
 ZERITH_H1_PRO_WHEEL_TRACK_WIDTH_M = 0.379
-ZERITH_H1_PRO_MAX_VX_MPS = 0.08
-ZERITH_H1_PRO_MAX_WZ_RADPS = 0.4
-ZERITH_H1_PRO_MAX_WHEEL_SPEED_RADPS = 1.0
+ZERITH_H1_PRO_MAX_VX_MPS = 0.30
+ZERITH_H1_PRO_MAX_WZ_RADPS = 1.00
+ZERITH_H1_PRO_MAX_WHEEL_SPEED_RADPS = 5.0
 ZERITH_H1_PRO_LOCOMOTION_COMMAND_TIMEOUT_SECONDS = 0.25
 
 

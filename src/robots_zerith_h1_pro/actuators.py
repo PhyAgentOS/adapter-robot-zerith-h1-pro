@@ -52,9 +52,9 @@ LIFT_M_RANGE = (0.0, 0.8)
 
 # Position actuator limits come from the SDK demo:
 # H1_SDK_1.3.7/robot_SDK/example/h1_low_level_motor_limit.cpp.
-# The vendored SDK does not document wheel Speed units or limits; the project
-# uses the low-level demo's magnitude 1.0 as a conservative ceiling pending
-# hardware validation. Linear axes are exposed in meters.
+# The vendored SDK does not document wheel Speed units or limits; wheel bounds
+# use the shared project ceiling in config.py and are not manufacturer ratings.
+# Linear axes are exposed in meters.
 ACTUATOR_LIMITS: dict[str, tuple[float, float]] = {
     "wheel_left": (
         -ZERITH_H1_PRO_MAX_WHEEL_SPEED_RADPS,

@@ -5,7 +5,7 @@ import tomllib
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "1.0.0"
+EXPECTED_VERSION = "1.0.1"
 
 
 def test_project_and_lock_versions_match_release() -> None:
