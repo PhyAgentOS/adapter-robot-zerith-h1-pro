@@ -4,6 +4,7 @@ import math
 import threading
 import time
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -80,15 +81,36 @@ def _driver(
 
 
 class LocomotionConfigTest(unittest.TestCase):
-    def test_conservative_defaults_are_explicit(self) -> None:
+    def test_navigation_defaults_are_explicit(self) -> None:
         config = ZerithH1ProNodeConfig.from_dict({})
 
         self.assertAlmostEqual(config.wheel_radius_m, 0.0835)
         self.assertAlmostEqual(config.wheel_track_width_m, 0.379)
-        self.assertAlmostEqual(config.locomotion_max_vx_mps, 0.08)
-        self.assertAlmostEqual(config.locomotion_max_wz_radps, 0.4)
-        self.assertAlmostEqual(config.locomotion_max_wheel_speed_radps, 1.0)
+        self.assertAlmostEqual(config.locomotion_max_vx_mps, 0.30)
+        self.assertAlmostEqual(config.locomotion_max_wz_radps, 1.00)
+        self.assertAlmostEqual(config.locomotion_max_wheel_speed_radps, 5.0)
         self.assertAlmostEqual(config.locomotion_command_timeout_seconds, 0.25)
+
+    def test_shipped_yaml_files_use_navigation_limits(self) -> None:
+        config_dir = Path(__file__).resolve().parents[1] / "config"
+        for filename in (
+            "config.yaml", "config.example.yaml", "config.remote_pc.example.yaml"
+        ):
+            with self.subTest(filename=filename):
+                config = ZerithH1ProNodeConfig.from_yaml_path(config_dir / filename)
+                self.assertEqual(config.locomotion_max_vx_mps, 0.30)
+                self.assertEqual(config.locomotion_max_wz_radps, 1.00)
+                self.assertEqual(config.locomotion_max_wheel_speed_radps, 5.0)
+
+    def test_lower_deployment_limits_remain_supported(self) -> None:
+        config = ZerithH1ProNodeConfig.from_dict({
+            "locomotion_max_vx_mps": 0.08,
+            "locomotion_max_wz_radps": 0.4,
+            "locomotion_max_wheel_speed_radps": 1.0,
+        })
+        self.assertEqual(config.locomotion_max_vx_mps, 0.08)
+        self.assertEqual(config.locomotion_max_wz_radps, 0.4)
+        self.assertEqual(config.locomotion_max_wheel_speed_radps, 1.0)
 
     def test_wheels_remain_available_in_joint_actuator_order(self) -> None:
         config = ZerithH1ProNodeConfig.from_dict(
@@ -106,7 +128,7 @@ class LocomotionConfigTest(unittest.TestCase):
             ("wheel_track_width_m", -1.0),
             ("locomotion_max_vx_mps", math.inf),
             ("locomotion_max_wz_radps", math.nan),
-            ("locomotion_max_wheel_speed_radps", 1.1),
+            ("locomotion_max_wheel_speed_radps", 5.1),
             ("locomotion_command_timeout_seconds", 0.0),
         ):
             with self.subTest(field=field), self.assertRaises(ValueError):
@@ -118,11 +140,46 @@ class LocomotionConfigTest(unittest.TestCase):
             )
         with self.assertRaisesRegex(ValueError, "locomotion_max_wz_radps"):
             ZerithH1ProNodeConfig.from_dict(
-                {"wheel_track_width_m": 1.0, "locomotion_max_wz_radps": 0.4}
+                {"wheel_track_width_m": 2.0, "locomotion_max_wz_radps": 1.0}
             )
 
 
 class LocomotionDriverTest(unittest.TestCase):
+    def test_constructor_accepts_new_ceiling_and_rejects_excess(self) -> None:
+        fake_sdk = SimpleNamespace(EtherCAT_Motor_Index=_MotorIndex)
+        with patch("zerith_h1_pro.driver.sdk.load_h1_sdk", return_value=fake_sdk), \
+                patch.object(ZerithH1ProDriver, "connect") as connect:
+            driver = ZerithH1ProDriver(
+                sdk_root="unused", auto_connect=False,
+                actuator_order=["wheel_left", "wheel_right"],
+            )
+            self.assertEqual(driver.locomotion_max_wheel_speed_radps, 5.0)
+            self.assertEqual(driver._locomotion_spec.max_vx, 0.30)
+            self.assertEqual(driver._locomotion_spec.max_wz, 1.00)
+            with self.assertRaisesRegex(ValueError, "project safety ceiling"):
+                ZerithH1ProDriver(
+                    sdk_root="unused", auto_connect=False,
+                    locomotion_max_wheel_speed_radps=5.1,
+                )
+            connect.assert_not_called()
+
+    def test_navigation_limits_preserve_curvature_under_wheel_saturation(self) -> None:
+        for vx, wz in ((0.30, 1.0), (0.30, -1.0), (-0.30, 1.0), (-0.30, -1.0)):
+            with self.subTest(vx=vx, wz=wz):
+                robot = _FakeRobot()
+                driver = _driver(robot, max_vx=0.30, max_wz=1.0)
+                driver.wheel_radius_m = 0.0835
+                driver.wheel_track_width_m = 0.379
+                driver.locomotion_max_wheel_speed_radps = 5.0
+                driver.set_locomotion_command(LocomotionCommand(vx=vx, vy=0.0, wz=wz))
+                left, right = (speed for _, speed in robot.calls)
+                self.assertAlmostEqual(max(abs(left), abs(right)), 5.0)
+                actual_vx = (left + right) * driver.wheel_radius_m / 2.0
+                actual_wz = (right - left) * driver.wheel_radius_m / driver.wheel_track_width_m
+                self.assertGreater(actual_vx / vx, 0.0)
+                self.assertLess(actual_vx / vx, 1.0)
+                self.assertAlmostEqual(actual_vx / vx, actual_wz / wz)
+
     def test_driver_satisfies_standard_locomotion_protocol(self) -> None:
         self.assertIsInstance(_driver(_FakeRobot()), LocomotionRobotDriver)
 

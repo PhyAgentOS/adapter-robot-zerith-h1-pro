@@ -1,6 +1,6 @@
 [project]
 name = "zerith-h1-pro"
-version = "1.0.0"
+version = "1.0.1"
 description = "Zerith H1 Pro Forge robot node and demos"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
