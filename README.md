@@ -1,3 +1,5 @@
+[简体中文](README_zh.md)
+
 # Zerith H1 Pro
 
 [查看机器人构型说明](description.md)
@@ -119,3 +121,7 @@ Forge / H1_PRO 专用节点源码应放在 `src/`，打包、校验、资产生�
 ## 交付与验收（摘要）
 
 当前交付覆盖仿真资产与 Forge/Dora 仿真 workflow。真机节点、VR/同构参数、实机方向/零位/限位复核属于后续阶段；完成后在 `config/`、`examples/03_workflows/` 或 MR 中登记路径与命令。
+
+## CI policy
+
+Automated dependency vulnerability audits are not maintained as CI or merge gates on this branch. Existing tests, builds, and other checks remain in place. Removing the audit gate does not change locked dependencies or resolve previously reported vulnerabilities.
