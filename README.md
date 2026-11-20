@@ -1,43 +1,55 @@
 # Zerith H1 Pro
 
-[查看机器人构型说明](description.md)
+[English](README.md) | [简体中文](README_zh.md)
 
-Zerith H1 Pro 的独立 Forge robot 交付包，包含真机 driver、Python 3.12 SDK runtime、基础 CLI，以及最小 Dora 真机/仿真 demo。
+[Robot configuration description](description.md)
 
-## 快速检查
+Standalone Forge robot package for Zerith H1 Pro, with the hardware driver, Python 3.12 SDK runtime, CLI, simulation assets and minimal Dora hardware/simulation examples.
+
+## Version and environment
+
+This is version **2.0.0**, targeting Forge 2.x / Dora 1.x. **BREAKING CHANGE:** do not mix this node with Forge 1.x / Dora 0.4.x nodes. Callers, message producers/consumers and `adapter-forge-gateway` must use the same compatibility line. Keep legacy deployments on `stable/1.x`.
+
+- Python 3.12; frozen dependencies use Dora 1.0.1, Forge Common 2.1.0, Msgs 2.1.0, Robot 2.0.0 and Pillow 13.
+- Msgs 2.1.0 supports Pillow 13, removing the old Msgs/Pillow upper-bound conflict. Builds use a security-fixed setuptools version.
+- The vendor SDK contains Linux x86_64 / CPython 3.12 native libraries. macOS supports some software tests, but cannot load these `.so` files or qualify Linux hardware operation. The camera-only entrypoint has the same SDK platform requirement.
+- Use `uv sync --frozen`. PyInstaller also uses `uv.lock` and public packages, without a neighboring Forge source tree or a fresh unpinned dependency resolution.
+- Existing simulation assets and node entrypoints are retained. Dependency migration does not establish hardware, sustained-run or rollback acceptance. Run each entrypoint separately with `dora run`; every chained test must include a compatible `adapter-forge-gateway`.
+
+## Quick checks
 
 ```bash
-uv sync
+uv sync --frozen --python 3.12
 uv run robots-zerith-h1-pro --help
 uv run python -c "from zerith_h1_pro.driver import ZerithH1ProDriver"
 ```
 
-真机配置从 `config/config.yaml` 或 `config/config.example.yaml` 开始修改。`sdk_root` 可省略：开发时默认使用本包 `third_party/H1_SDK_1.3.7`；PyInstaller 节点内置同版本 SDK。
+Start hardware configuration from `config/config.yaml` or `config/config.example.yaml`. `sdk_root` is optional: development defaults to `third_party/H1_SDK_1.3.7` in this package, and the PyInstaller node embeds that SDK version.
 
-`move-actuator` 是有意限制为 **LOW_LEVEL-only** 的真机安全命令；传入 `--control-mode gravity_compensation_level` 会在构造 driver 或加载 SDK 前直接拒绝，不会自动恢复或切换到 gravity compensation 模式。
+`move-actuator` is intentionally **LOW_LEVEL-only**. Passing `--control-mode gravity_compensation_level` is rejected before driver construction or SDK loading; the command never automatically restores or switches to gravity compensation mode.
 
-源码按职责拆分：`config.py` 管公开配置与默认值，`actuators.py` 管执行器元数据/换算，`sdk.py` 与 `camera_io.py` 管惰性 SDK I/O，`ipc.py` 管纯 IPC 编解码，`workers.py` 管子进程 worker，`subprocess_node.py` 只管父进程 Dora 编排，状态与安全机仍完整保留在 `driver.py`。
+Source responsibilities: `config.py` owns public configuration/defaults; `actuators.py` owns actuator metadata/conversions; `sdk.py` and `camera_io.py` own lazy SDK I/O; `ipc.py` owns IPC encoding; `workers.py` owns subprocess workers; `subprocess_node.py` coordinates the parent Dora process. Robot state and safety logic remain in `driver.py`.
 
-### 生命周期位姿合同
+### Lifecycle positions
 
-`positions` 只接受 `initial` 和 `reset`。follower 连接初始化后移动到 `initial`；断开时先停止底盘 locomotion，确认停车后再通过 `move_to_reset_position()` 移动到 `reset`，最后释放控制。
+`positions` accepts only `initial` and `reset`. A follower moves to `initial` after connection initialization. Disconnect first stops chassis locomotion, confirms stopping, then calls `move_to_reset_position()` to reach `reset` before releasing control.
 
-### 夹爪方向合同
+### Gripper direction
 
-厂商 H1 SDK 1.3.7 示例定义 `MOTOR_LEFT_ARM_8` / `MOTOR_RIGHT_ARM_8` 的 `Position=0.0` 为张开、`Position=1.5` 为闭合。Forge 对外统一使用物理 opening：`0.08 m` 张开、`0.0 m` 闭合，因此 driver 会做反向线性换算：
+The H1 SDK 1.3.7 examples define `MOTOR_LEFT_ARM_8` / `MOTOR_RIGHT_ARM_8` position `0.0` as open and `1.5` as closed. Forge exposes physical opening: `0.08 m` open and `0.0 m` closed. The driver applies an inverse linear conversion:
 
-| Forge opening | SDK Position | 状态 |
+| Forge opening | SDK Position | State |
 | ---: | ---: | --- |
-| `0.08 m` | `0.0` | 张开 |
-| `0.0 m` | `1.5` | 闭合 |
+| `0.08 m` | `0.0` | Open |
+| `0.0 m` | `1.5` | Closed |
 
-低层命令和状态继续使用厂商低层示例采用的 `setMotorControl_low` / `getMotorState`；反馈速度同步转换为米每秒并反向，使正速度始终表示 opening 增大。
+Low-level commands and state use the vendor examples' `setMotorControl_low` / `getMotorState`. Feedback velocity is converted to metres per second with reversed sign, so positive velocity always means increasing opening.
 
-### 移动底盘合同
+### Mobile base
 
-通用 `JointCommand`/`JointState` 合同继续保留 `wheel_left`、`wheel_right` 两项 velocity actuator，加上 21 项 position actuator 共 23 项。节点同时接受标准 Forge `locomotion_command` 输入（`forge_msgs.LocomotionCommand`）：`vx` 为前向米每秒，`vy` 不受差速底盘支持并强制为 `0`，`wz` 为逆时针正方向弧度每秒。follower 只在实际 SDK 模式为 `LOW_LEVEL` 时动作，底盘只调用双轮 `setChassis_low`，不会使用厂商高层移动 API。
+The `JointCommand`/`JointState` contract retains `wheel_left` and `wheel_right` velocity actuators alongside 21 position actuators (23 total). The node also accepts standard Forge `locomotion_command` (`forge_msgs.LocomotionCommand`): `vx` is forward metres per second, `vy` is unsupported by the differential drive and forced to zero, and `wz` is counterclockwise radians per second. A follower acts only when the actual SDK mode is `LOW_LEVEL`; chassis control uses dual-wheel `setChassis_low`, not the vendor high-level movement API.
 
-`vx/wz` 先按配置限速，再按差速模型换算轮速；混合命令超过轮速上限时按同一比例缩放左右轮以保持曲率。直接 wheel `JointCommand` 必须同时提供左右轮 velocity。两条入口共用 LOW_LEVEL wheel write、模式锁和 watchdog；非零命令必须以快于 `locomotion_command_timeout_seconds` 的频率持续刷新，显式零命令和 `disconnect()` 也会给双轮发送零速。
+`vx/wz` are limited before differential-drive conversion. Mixed commands exceeding wheel limits scale both wheels together to preserve curvature. Direct wheel `JointCommand` must provide both wheel velocities. Both inputs share LOW_LEVEL writes, mode locking and the watchdog. Nonzero commands must refresh faster than `locomotion_command_timeout_seconds`; explicit zero commands and `disconnect()` also send zero speed to both wheels.
 
 ```yaml
 wheel_radius_m: 0.0835
@@ -48,74 +60,76 @@ locomotion_max_wheel_speed_radps: 1.0
 locomotion_command_timeout_seconds: 0.25
 ```
 
-轮径和轮距来自交付模型，真机启用前必须校验有效滚动半径、转向方向和打滑影响。vendored SDK 只把 wheel 字段称为 `Speed`，没有明确写出单位，也未声明示例使用的 `±1` 是硬件上限；当前按 wheel rad/s 换算，并把 `1.0` 作为项目保守安全上限，必须通过架空轮的 `Speed_Actual` 与位置导数实测确认。Dora 中应将 `LocomotionCommand` source 直接连接到 Zerith 节点的 `locomotion_command`；底盘命令使用独立 latest-only IPC queue，并优先于每轮最多一条关节命令处理。IPC 接收时间计入 watchdog freshness，过期非零命令不会重新启动底盘。
+Wheel radius and track width come from the delivered model. Validate effective rolling radius, steering direction and slip before hardware use. The vendored SDK calls the wheel field `Speed` without specifying units or declaring its example `±1` a hardware limit. The project currently interprets it as wheel rad/s and uses `1.0` as a conservative project limit; confirm this against `Speed_Actual` and measured position derivatives with wheels safely raised. Route the `LocomotionCommand` source directly to `locomotion_command`. Chassis commands have a separate latest-only IPC queue and take priority over at most one joint command per iteration. IPC receive time counts toward watchdog freshness, preventing stale nonzero commands from restarting the base.
 
-## 打包 Dora 节点
+## Software validation
+
+```bash
+uv lock --check
+uv sync --frozen --extra test --python 3.12
+uv run --frozen pytest tests -q
+uv build
+uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file requirements-audit.txt
+uvx --python 3.12 pip-audit --requirement requirements-audit.txt
+```
+
+CI retains dependency auditing and checks the existing robot executable built with frozen dependencies, including `--help` startup. The camera command remains an independent troubleshooting entrypoint in the source/installed package; this change adds no camera binary distribution.
+
+## Package the Dora node
 
 ```bash
 ./scripts/build_pyinstaller.sh
-# 产物: dist/robots_zerith_h1_pro
+# Output: dist/robots_zerith_h1_pro
 dist/robots_zerith_h1_pro --help
 ```
 
-## Dora Demo
+## Dora examples
 
-- 真机最小 demo：`examples/02_dora_tests/hardware_minimal`
-- 仿真最小 demo：`examples/03_workflows/simulation/mujoco_H1_PRO/dataflow.minimal_v2.yaml`
+- Minimal hardware example: `examples/02_dora_tests/hardware_minimal`
+- Minimal simulation example: `examples/03_workflows/simulation/mujoco_H1_PRO/dataflow.minimal_v2.yaml`
 
-两个 demo 都使用 Forge runtime 提供的二进制节点，并让 image/state 先进入 `task_robot` 后再输出到 viewer 或下游节点。
+Both examples use Forge runtime binaries and route image/state through `task_robot` before viewers/downstream nodes. Align their peer versions before running them.
 
-真机最小 demo 对 Dora 只暴露一个 `zerith_h1_pro` 节点。当前 H1 robot SDK 与 camera SDK 同进程加载会触发 native `exit 139`，所以 `src/robots_zerith_h1_pro/main.py` 内部启动 robot/camera 两个 subprocess 隔离 SDK，由父进程统一输出 `joint_state` 和 image topic 到 `task_robot`。`src/robots_zerith_h1_pro/camera_main.py` 保留为相机单独排障入口，不作为默认 demo 链路。
-# 零次方 Zerith H1_PRO（Forge 机器人交付包）
+The minimal hardware example exposes one `zerith_h1_pro` node to Dora. Loading the H1 robot and camera SDKs in one process causes native `exit 139`, so `src/robots_zerith_h1_pro/main.py` uses isolated robot/camera subprocesses. The parent emits `joint_state` and image topics to `task_robot`. `src/robots_zerith_h1_pro/camera_main.py` remains a camera-only troubleshooting entrypoint, outside the default example chain.
 
-## 交付内容
+## Delivered content
 
-| 内容 | 路径 |
-|------|------|
-| **MJCF + meshes** | `assets/mjcf/`，仿真入口为 `scene.xml`，主模型为 `H1_PRO.xml` |
-| **URDF** | `assets/urdf`，可用可视化工具（`https://viewer.robotsfan.com/`）查看
-| **GLB / 可视化资产** | `assets/glb/`，由资产流水线生成
-| **仿真配置示例** | `examples/03_workflows/simulation/mujoco_H1_PRO/` |
-| **配置与标定模板** | `config/` |
+| Content | Path |
+| --- | --- |
+| MJCF and meshes | `assets/mjcf/`; simulation entry `scene.xml`, main model `H1_PRO.xml` |
+| URDF | `assets/urdf/`; view with tools such as [RobotsFan](https://viewer.robotsfan.com/) |
+| GLB visualization assets | `assets/glb/` |
+| Simulation examples | `examples/03_workflows/simulation/mujoco_H1_PRO/` |
+| Configuration/calibration templates | `config/` |
 
-`forge_runtime` 当前未发现上游内置的 零次方 Zerith H1_PRO 专用 `mujoco_assets` 示例；本仓已在 `examples/03_workflows/simulation/mujoco_H1_PRO/` 提供仿真配置示例，其 `simulator.yaml` 的 `model_path` 指向本仓 `assets/mjcf/scene.xml`。
+The repository provides its own Zerith H1 Pro simulation example; `simulator.yaml` points to `assets/mjcf/scene.xml`. A dedicated upstream `forge_runtime` `mujoco_assets` example was not identified in the original integration.
 
-## 目录结构
+## Directory layout
 
-| 路径 | 说明 |
-|------|------|
-| `assets/urdf/` | URDF (规范落盘) |
-| `assets/mjcf/` | MJCF、mesh、`scene.xml`、模型图片等 |
-| `assets/glb/` | Web / 可视化 GLB |
-| `examples/01_sdk_tests/` | 直连厂商/底层驱动的最小测试（与 Forge 解耦） |
-| `examples/02_dora_tests/` | Dora 节点与 Topic 集成测试 |
-| `examples/03_workflows/` | 端到端 Forge workflow（仿真 / 真机 / 同构 / VR） |
-| `src/` | Forge 规范机器人节点源码（见下方说明） |
-| `scripts/` | MJCF 校验、Dora 节点打包 |
-| `config/` | 端口、相机、关节顺序、VR 标定等 |
+| Path | Purpose |
+| --- | --- |
+| `assets/urdf/` | URDF assets |
+| `assets/mjcf/` | MJCF, meshes, scene and model images |
+| `assets/glb/` | Web/visualization GLB |
+| `examples/01_sdk_tests/` | Direct vendor/driver tests independent of Forge |
+| `examples/02_dora_tests/` | Dora node/topic integration tests |
+| `examples/03_workflows/` | Simulation, hardware, mirrored control and VR workflows |
+| `src/` | Forge robot node source |
+| `scripts/` | MJCF validation and node packaging |
+| `config/` | Ports, cameras, joint ordering and VR calibration |
 
-## 资产状态
+## Assets and simulation integration
 
-零次方 Zerith H1_PRO 的 MJCF、mesh 与 GLB 已完成同步并落盘到本仓，后续仿真与交付以本仓 `assets/` 下内容为准：
+The MJCF, meshes, URDF and GLB are stored in this repository. Use `assets/` as the delivered source of truth; ordinary development, CI and simulation examples do not require an external asset repository.
 
-- `assets/mjcf/`：MuJoCo 仿真入口，使用 `scene.xml`，`attach` 前缀为 `item_1/`
-- `assets/glb/H1_PRO.glb`：Web / 可视化交付资产（pipeline 产物）
-- `assets/urdf/`：URDF与mjcf对应，可直接可视化
+- MuJoCo entry: `assets/mjcf/scene.xml`, with attach prefix `item_1/`.
+- Visualization asset: `assets/glb/H1_PRO.glb`.
+- URDF: `assets/urdf/`, corresponding to the MJCF model.
 
-零次方 Zerith H1_PRO 的 MJCF、mesh 与 GLB 已完成同步并落盘到本仓，后续仿真与交付以本仓 `assets/` 下内容为准；常规开发、CI 与仿真示例不再依赖外部资产仓库。
+See `examples/03_workflows/simulation/SIMULATION_INTEGRATION.md` for commands and Forge runtime integration. The sequence is asset validation → `verify_mjcf` → convention alignment → the in-repository simulation example (`model_path` referencing this repository's scene, `prefix: item_1/`, 25 actuators matching `task_robot`) → automated sweeps and visual smoke checks → comparison with hardware. See `examples/03_workflows/simulation/JOINT_SWEEP_CHECKLIST.md` for check records.
 
-## 仿真接入流程
+Node implementations belong in `src/`; packaging, validation and asset-generation helpers belong in `scripts/`. Simulation examples reuse generic MuJoCo/TaskRobot nodes. Record additional implementations and entrypoints in `src/README.md`.
 
-分步说明、与 `forge_runtime` 对接要点及复现命令见：
+## Delivery and acceptance
 
-**`examples/03_workflows/simulation/SIMULATION_INTEGRATION.md`**
-
-摘要：资产齐 → `verify_mjcf` → 对齐约定 → 运行本仓 **`examples/03_workflows/simulation/mujoco_H1_PRO/`**（`model_path` 指本仓 `scene.xml`，`prefix: item_1/`，25 个 actuator 与 `task_robot` 一致）→ 自动 sweep + 人工观察 smoke check → 与真机对表。检查记录见 `examples/03_workflows/simulation/JOINT_SWEEP_CHECKLIST.md`。
-
-## `src/` 与 Forge 节点
-
-Forge / H1_PRO 专用节点源码应放在 `src/`，打包、校验、资产生成等辅助命令放在 `scripts/`。当前仿真示例复用 `forge_runtime` 的通用 MuJoCo / TaskRobot 节点；若后续增加真机节点、H1_PRO 专用适配层或 submodule，请在 `src/README.md` 记录实现位置、版本与入口。
-
-## 交付与验收（摘要）
-
-当前交付覆盖仿真资产与 Forge/Dora 仿真 workflow。真机节点、VR/同构参数、实机方向/零位/限位复核属于后续阶段；完成后在 `config/`、`examples/03_workflows/` 或 MR 中登记路径与命令。
+Existing delivery records cover simulation assets and Forge/Dora simulation workflows. Hardware direction/zero/limit checks, VR/mirrored-control parameters and deployment acceptance still need verification. Record completed checks and commands alongside the applicable configuration or workflow; software checks alone do not establish hardware acceptance.
