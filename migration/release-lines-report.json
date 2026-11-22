@@ -23,7 +23,7 @@
       }
     ]
   },
-  "source_profile_scope": "Local candidate worktrees; proposed maintenance changes are not deployed or merged yet. Full checksums and raw logs remain in the local workspace.",
+  "source_profile_scope": "Compatibility metadata after integrating main; runtime acceptance remains separate.",
   "source_profiles": [
     {
       "repo": "PhyAgentOS/adapter-robot-zerith-h1-pro",
@@ -44,18 +44,18 @@
     {
       "repo": "PhyAgentOS/adapter-robot-zerith-h1-pro",
       "line": "2.x",
-      "version": "1.0.1",
+      "version": "2.0.0",
       "forge_majors": [
-        1
+        2
       ],
       "dora_versions": [
         [
-          0,
-          4
+          1,
+          0
         ]
       ],
       "kind": "python",
-      "ready": false
+      "ready": true
     }
   ],
   "dora_run": {
@@ -71,5 +71,6 @@
   "linux_binary_release_build": "not-run in this change; existing binary workflow checks are preserved",
   "hardware_model_sustained_rollback_acceptance": "pending",
   "published_tags_releases_modified": false,
-  "gitlab_sync": false
+  "gitlab_sync": false,
+  "historical_validation_note": "Original release-tooling validation predates the Forge 2.x merge. Conflict resolution retains current mainline runtime, assets, SDK, lockfile and CI; current validation is recorded in the PR."
 }

@@ -26,25 +26,13 @@ echo "==> [robots_zerith_h1_pro] 初始化隔离构建虚拟环境..."
 VENV_DIR="${NODE_DIR}/.venv_build"
 rm -rf "${VENV_DIR}"
 
-FORGE_ROOT="$(cd "${NODE_DIR}/../../forge/packages" 2>/dev/null && pwd || true)"
-
-if command -v uv >/dev/null 2>&1; then
-  uv venv --no-workspace "${VENV_DIR}" --python 3.12
-  echo "==> [robots_zerith_h1_pro] 安装包依赖与 PyInstaller (uv)..."
-  uv pip install --python "${VENV_DIR}/bin/python" -e "${NODE_DIR}" pyinstaller
-elif [[ -n "${FORGE_ROOT}" && -d "${FORGE_ROOT}/common" ]]; then
-  python3.12 -m venv "${VENV_DIR}"
-  "${VENV_DIR}/bin/python" -m pip install -U pip setuptools wheel -q
-  echo "==> [robots_zerith_h1_pro] 安装包依赖与 PyInstaller (pip)..."
-  "${VENV_DIR}/bin/pip" install -e "${NODE_DIR}" \
-    -e "${FORGE_ROOT}/common" \
-    -e "${FORGE_ROOT}/msgs" \
-    -e "${FORGE_ROOT}/robot" \
-    pyinstaller
-else
-  echo "ERROR: 需要 uv 或 ../../forge/packages 下的 forge 本地包。" >&2
-  exit 1
-fi
+trap 'rm -rf "${VENV_DIR}"' EXIT
+UV_PROJECT_ENVIRONMENT="${VENV_DIR}" uv sync \
+  --project "${NODE_DIR}" \
+  --frozen \
+  --no-dev \
+  --extra pyinstaller \
+  --python 3.12
 
 mkdir -p "${NODE_DIR}/dist" "${NODE_DIR}/build/pyinstaller/robots_zerith_h1_pro"
 
@@ -58,8 +46,6 @@ echo "==> [robots_zerith_h1_pro] PyInstaller 打包..."
     --workpath "${NODE_DIR}/build/pyinstaller/robots_zerith_h1_pro" \
     "${SCRIPT_DIR}/zerith_h1_pro.spec"
 )
-
-rm -rf "${VENV_DIR}"
 
 DIST_FILE="${NODE_DIR}/dist/robots_zerith_h1_pro"
 if [[ -f "${DIST_FILE}" ]]; then

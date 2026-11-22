@@ -6,10 +6,20 @@
 
 Zerith H1 Pro 的独立 Forge robot 交付包，包含真机 driver、Python 3.12 SDK runtime、基础 CLI，以及最小 Dora 真机/仿真 demo。
 
+## 版本与环境
+
+本版本为 **2.0.0**，对应 Forge 2.x / Dora 1.x。**BREAKING CHANGE**：不能把本节点与 Forge 1.x / Dora 0.4.x 节点直接混用；调用方、消息生产者/消费者和 `adapter-forge-gateway` 必须对齐版本线。旧部署继续使用 `stable/1.x`。
+
+- Python 3.12；冻结依赖为 Dora 1.0.1、Forge Common 2.1.0、Msgs 2.1.0、Robot 2.0.0、Pillow 13。
+- Msgs 2.1.0 支持 Pillow 13，消除旧 Msgs/Pillow 上限冲突；构建使用修复版 setuptools。
+- 厂商 SDK 为 Linux x86_64 / CPython 3.12 原生库。macOS 可以做部分软件测试，不能加载这些 `.so` 或代替 Linux 真机验收。相机独立入口同样受 SDK 平台限制。
+- 使用 `uv sync --frozen`；PyInstaller 构建也使用 `uv.lock` 和公开包源，不再依赖相邻 Forge 源码目录或临时重新解析依赖。
+- 已有仿真资产与节点入口保留。升级依赖不代表真机、持续运行或回滚验收通过；每个入口须分别执行 `dora run`，串联测试须包含同版本线的 `adapter-forge-gateway`。
+
 ## 快速检查
 
 ```bash
-uv sync
+uv sync --frozen --python 3.12
 uv run robots-zerith-h1-pro --help
 uv run python -c "from zerith_h1_pro.driver import ZerithH1ProDriver"
 ```
@@ -51,6 +61,19 @@ locomotion_command_timeout_seconds: 0.25
 ```
 
 轮径和轮距来自交付模型，真机启用前必须校验有效滚动半径、转向方向和打滑影响。vendored SDK 只把 wheel 字段称为 `Speed`，没有明确写出单位，也未声明示例使用的 `±1` 是硬件上限；当前按 wheel rad/s 换算，并把 `1.0` 作为项目保守安全上限，必须通过架空轮的 `Speed_Actual` 与位置导数实测确认。Dora 中应将 `LocomotionCommand` source 直接连接到 Zerith 节点的 `locomotion_command`；底盘命令使用独立 latest-only IPC queue，并优先于每轮最多一条关节命令处理。IPC 接收时间计入 watchdog freshness，过期非零命令不会重新启动底盘。
+
+## 软件验证
+
+```bash
+uv lock --check
+uv sync --frozen --extra test --python 3.12
+uv run --frozen pytest tests -q
+uv build
+uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file requirements-audit.txt
+uvx --python 3.12 pip-audit --requirement requirements-audit.txt
+```
+
+CI 保留依赖审计，并检查冻结依赖下的现有机器人二进制构建与 `--help` 启动。相机命令仍是源码/安装包中的独立排障入口，本次不新增相机二进制交付。
 
 ## 打包 Dora 节点
 
@@ -124,6 +147,9 @@ Forge / H1_PRO 专用节点源码应放在 `src/`，打包、校验、资产生�
 
 ## 分版本发布
 
+默认分支已升级至 Forge 2.x；Forge 1.x 从 `stable/1.x` 维护发布。
+
+
 **发布规则（强制）：** 合并版本/锁文件修改 → 在已审查提交上创建 annotated 版本标签 → 从该标签精确构建 → 校验产物 → 发布。禁止使用移动分支、未打标签的提交构建 Release，禁止覆盖已发布标签。
 
 | 维护线 | 源码 | 节点/包版本 | 运行时 |
@@ -133,7 +159,6 @@ Forge / H1_PRO 专用节点源码应放在 `src/`，打包、校验、资产生�
 
 **旧版版本号统一：** `stable/1.x` 原为 0.x 的节点以 **1.0.0** 发布，保留 Forge 1.x / Dora 0.4.x 依赖与运行行为。已有 1.x 版本保留。节点/包主版本与 Forge 兼容线一致，不再接受 0.x 发布标签。
 
-当前默认分支仍使用 Forge 1.x；必须先完成 2.x 迁移，2.x 发布校验才会通过。
 
 两条线均从 `main` 运行 **Build versioned release**。先将版本和锁文件修改通过 PR 合并至对应源码分支，再在已审查提交上创建未占用的 **annotated** 标签，标签必须匹配包元数据。禁止移动已有标签或复用已发布版本。工作流使用自身已审查的发布工具与精确标签源码，旧标签无需包含新发布脚本。
 
